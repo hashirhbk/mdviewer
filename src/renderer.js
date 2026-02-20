@@ -4,6 +4,7 @@ const MarkdownIt = require('markdown-it');
 const hljs = require('highlight.js');
 
 const openBtn = document.getElementById('openBtn');
+const refreshBtn = document.getElementById('refreshBtn');
 const modeSourceBtn = document.getElementById('modeSource');
 const modeSplitBtn = document.getElementById('modeSplit');
 const modeRenderedBtn = document.getElementById('modeRendered');
@@ -34,6 +35,7 @@ const state = {
   currentDir: '',
   dirty: false,
   mode: 'split',
+  needsRefresh: false,
 };
 
 let renderTimer = null;
@@ -60,6 +62,11 @@ function renderNow() {
   renderedOutput.innerHTML = md.render(markdownInput.value);
 }
 
+function setRefreshVisible(visible) {
+  state.needsRefresh = visible;
+  refreshBtn.classList.toggle('hidden', !visible);
+}
+
 function scheduleRender() {
   if (renderTimer) clearTimeout(renderTimer);
   renderTimer = setTimeout(renderNow, 220);
@@ -70,6 +77,7 @@ function loadDocument(doc) {
   state.currentDir = path.dirname(doc.path);
   state.dirty = false;
   markdownInput.value = doc.content;
+  setRefreshVisible(false);
   updateTitle();
   renderNow();
 }
@@ -89,7 +97,25 @@ async function openDocument() {
   }
 }
 
+async function refreshDocument() {
+  if (!state.currentPath) return;
+
+  if (state.dirty) {
+    const proceed = window.confirm('File changed on disk. Reload and discard unsaved changes?');
+    if (!proceed) return;
+  }
+
+  try {
+    const doc = await window.mdviewerAPI.readFile(state.currentPath);
+    if (!doc) return;
+    loadDocument(doc);
+  } catch (err) {
+    window.alert(`Refresh failed: ${String(err)}`);
+  }
+}
+
 openBtn.addEventListener('click', openDocument);
+refreshBtn.addEventListener('click', refreshDocument);
 modeSourceBtn.addEventListener('click', () => setMode('source'));
 modeSplitBtn.addEventListener('click', () => setMode('split'));
 modeRenderedBtn.addEventListener('click', () => setMode('rendered'));
@@ -106,6 +132,13 @@ window.mdviewerAPI.onFileOpened((doc) => {
 
 window.mdviewerAPI.onFileOpenError((msg) => {
   window.alert(`Open failed: ${msg}`);
+});
+
+window.mdviewerAPI.onFileChanged((payload) => {
+  if (!payload || !payload.path) return;
+  if (!state.currentPath) return;
+  if (payload.path !== state.currentPath) return;
+  setRefreshVisible(true);
 });
 
 window.mdviewerAPI.onSetMode((mode) => {
@@ -140,4 +173,5 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
 
 setMode('split');
 renderNow();
+setRefreshVisible(false);
 updateTitle();

@@ -1,9 +1,12 @@
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain } = require('electron');
 
 let mainWindow;
+let fileWatcher = null;
+let watchedPath = '';
+let watchedMtimeMs = 0;
 
 function resolveInitialMode(argv) {
   for (const arg of argv) {
@@ -80,6 +83,51 @@ async function openMarkdownDialog() {
   return readFileSafe(targetPath);
 }
 
+function clearWatchedFile() {
+  if (fileWatcher) {
+    fileWatcher.close();
+    fileWatcher = null;
+  }
+  watchedPath = '';
+  watchedMtimeMs = 0;
+}
+
+async function watchFileChanges(filePath) {
+  clearWatchedFile();
+  watchedPath = filePath;
+
+  try {
+    const stats = await fsp.stat(filePath);
+    watchedMtimeMs = stats.mtimeMs;
+  } catch (_) {
+    watchedMtimeMs = 0;
+  }
+
+  try {
+    fileWatcher = fs.watch(filePath, { persistent: false }, async () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (watchedPath !== filePath) return;
+
+      try {
+        const stats = await fsp.stat(filePath);
+        if (stats.mtimeMs === watchedMtimeMs) return;
+        watchedMtimeMs = stats.mtimeMs;
+      } catch (_) {
+        // Keep notifying; file may have been replaced/removed.
+      }
+
+      mainWindow.webContents.send('mdviewer:file-changed', { path: filePath });
+    });
+
+    fileWatcher.on('error', () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('mdviewer:file-changed', { path: filePath });
+    });
+  } catch (_) {
+    // If watch cannot be established, continue without live notifications.
+  }
+}
+
 function createWindow() {
   const argv = launchArgs();
   const initialMode = resolveInitialMode(argv);
@@ -101,6 +149,18 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
   mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.on('closed', () => {
+    clearWatchedFile();
+    mainWindow = null;
+  });
+
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    if (!params.selectionText || !params.selectionText.trim()) {
+      return;
+    }
+    const menu = Menu.buildFromTemplate([{ role: 'copy', label: 'Copy' }]);
+    menu.popup({ window: mainWindow });
+  });
 
   const fileArg = resolveFileArg(argv);
   mainWindow.webContents.once('did-finish-load', async () => {
@@ -112,6 +172,7 @@ function createWindow() {
     try {
       const doc = await readFileSafe(fileArg);
       mainWindow.webContents.send('mdviewer:file-opened', doc);
+      await watchFileChanges(doc.path);
     } catch (err) {
       mainWindow.webContents.send('mdviewer:file-open-error', String(err.message || err));
     }
@@ -130,11 +191,22 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+app.on('before-quit', () => {
+  clearWatchedFile();
+});
+
 ipcMain.handle('mdviewer:open-dialog', async () => {
   const doc = await openMarkdownDialog();
+  if (doc && doc.path) {
+    await watchFileChanges(doc.path);
+  }
   return doc;
 });
 
 ipcMain.handle('mdviewer:read-file', async (_event, filePath) => {
-  return readFileSafe(filePath);
+  const doc = await readFileSafe(filePath);
+  if (doc.path) {
+    await watchFileChanges(doc.path);
+  }
+  return doc;
 });
