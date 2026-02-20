@@ -1,4 +1,5 @@
-const fs = require('node:fs/promises');
+const fs = require('node:fs');
+const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 
@@ -15,19 +16,46 @@ function resolveInitialMode(argv) {
   return 'split';
 }
 
+function launchArgs() {
+  return process.argv.slice(process.defaultApp ? 2 : 1);
+}
+
+function normalizePathArg(arg) {
+  if (!arg || arg.startsWith('--')) return '';
+  if (arg === '.' || arg === '..') return '';
+
+  if (arg.startsWith('file://')) {
+    try {
+      const url = new URL(arg);
+      return decodeURIComponent(url.pathname);
+    } catch (_) {
+      return '';
+    }
+  }
+
+  return path.resolve(arg);
+}
+
 function resolveFileArg(argv) {
   for (const arg of argv) {
-    if (!arg) continue;
-    if (arg.startsWith('--')) continue;
     if (arg.endsWith('.js')) continue;
-    const full = path.resolve(arg);
-    return full;
+
+    const full = normalizePathArg(arg);
+    if (!full) continue;
+
+    try {
+      const stat = fs.statSync(full);
+      if (stat.isDirectory()) continue;
+      return full;
+    } catch (_) {
+      // Ignore non-existing paths and keep scanning args.
+    }
   }
   return '';
 }
 
 async function readFileSafe(filePath) {
-  const content = await fs.readFile(filePath, 'utf8');
+  const content = await fsp.readFile(filePath, 'utf8');
   return {
     path: filePath,
     content,
@@ -53,7 +81,8 @@ async function openMarkdownDialog() {
 }
 
 function createWindow() {
-  const initialMode = resolveInitialMode(process.argv.slice(1));
+  const argv = launchArgs();
+  const initialMode = resolveInitialMode(argv);
 
   mainWindow = new BrowserWindow({
     width: 1360,
@@ -73,7 +102,7 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
   mainWindow.once('ready-to-show', () => mainWindow.show());
 
-  const fileArg = resolveFileArg(process.argv.slice(1));
+  const fileArg = resolveFileArg(argv);
   mainWindow.webContents.once('did-finish-load', async () => {
     mainWindow.webContents.send('mdviewer:set-mode', initialMode);
     if (!fileArg) {
