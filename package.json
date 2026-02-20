@@ -1,0 +1,20 @@
+{
+  "name": "mdviewer",
+  "version": "0.1.0",
+  "description": "Desktop Markdown viewer with source/split/rendered modes",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "start:linux": "electron .",
+    "start:mac": "electron .",
+    "start:win": "electron ."
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.1",
+    "markdown-it": "^14.1.0"
+  },
+  "devDependencies": {
+    "electron": "^37.2.5"
+  }
+}

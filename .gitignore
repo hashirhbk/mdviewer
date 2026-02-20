@@ -1,0 +1,14 @@
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+*.log
+
+# Ignore markdown docs except repository README
+*.md
+!README.md
+
+# Keep accidental nested repo out of this repo
+mdviewer/

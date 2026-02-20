@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mdviewer</title>
+  <link rel="stylesheet" href="../node_modules/highlight.js/styles/github.css" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="toolbar">
+    <button id="openBtn" class="btn">Open</button>
+    <div class="spacer"></div>
+    <button id="modeSource" class="btn mode">Markdown</button>
+    <button id="modeSplit" class="btn mode is-active">Split</button>
+    <button id="modeRendered" class="btn mode">Rendered</button>
+  </header>
+
+  <main id="workbench" class="workbench mode-split">
+    <section id="sourcePane" class="pane source-pane">
+      <textarea id="markdownInput" spellcheck="false" placeholder="Open a .md file to start..."></textarea>
+    </section>
+    <section id="previewPane" class="pane preview-pane">
+      <article id="renderedOutput" class="markdown-body"></article>
+    </section>
+  </main>
+
+  <script src="./renderer.js"></script>
+</body>
+</html>

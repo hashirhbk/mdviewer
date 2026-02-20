@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=mdviewer
+Comment=Markdown viewer with source/split/rendered modes
+Exec=__MDVIEWER_CMD__ %f
+Icon=text-markdown
+Terminal=false
+Categories=Utility;TextEditor;
+MimeType=text/markdown;text/x-markdown;
+StartupNotify=true
